@@ -1,0 +1,225 @@
+//Ciara Edwards 12308356
+
+options {
+  JAVA_UNICODE_ESCAPE = true;
+  IGNORE_CASE = true;
+}
+PARSER_BEGIN(BasicLParser)
+
+  public class BasicLParser {
+    //Parser execution
+    public static void main ( String args [ ] ) {
+
+      //Parser initialization
+      BasicLParser parser;
+
+      if(args.length == 0){
+        System.out.println ("Reading standard input ");
+        parser = new BasicLParser(System.in);
+      }
+      else if(args.length == 1){
+        System.out.println ("Reading the file " + args[0]);
+        try {
+          parser = new BasicLParser(new java.io.FileInputStream(args[0]));
+        }
+        catch(java.io.FileNotFoundException e) {
+          System.out.println ("BasicLParser: The file " + args[0] + " was not found.");
+          return;
+        }
+      }
+      else {
+        System.out.println ("You must use either:");
+        System.out.println ("java BasicLParser < file");
+        System.out.println ("Or");
+        System.out.println ("java BasicLParser file");
+        return;
+      }
+	  
+      try {
+        parser.prog();
+        System.out.println ("BasicLParser: The input was readed sucessfully.");
+      }
+      catch(ParseException e){
+        System.out.println ("There was an error during the parse.");
+        System.out.println (e.getMessage());
+      }
+    }
+  }
+PARSER_END(BasicLParser)
+
+//COMMENTS
+TOKEN_MGR_DECLS : {
+	static int commentNesting=0;
+}
+
+SKIP : {
+	< "--" (~["\r", "\n"]) *>
+	| "/*" {commentNesting++;} : IN_COMMENT
+}
+
+<IN_COMMENT> SKIP :
+{
+	"/*" {commentNesting++;}
+	| "*/" {commentNesting--;
+			if (commentNesting==0){ SwitchTo(DEFAULT);}
+			}
+	|	<~[]>
+}
+
+//SKIP WHITESPACE
+SKIP : {
+ " "
+|  "\t"
+|  "\n"
+|  "\r"
+|  "\f"
+}
+
+//KEYWORDS
+TOKEN : {
+	<AND: "and">
+|  <BOOL: "bool">
+|  <CONST: "const">
+|  <DO: "do">
+|  <ELSE: "else">
+|  <FALSE: "false">
+|  <IF: "if">
+|  <INT: "int">
+|  <MAIN: "main">
+|  <NOT: "not">
+|  <OR:  "or">
+|  <RETURN: "return">
+|  <THEN: "then">
+|  <TRUE: "true">
+|  <VAR: "var">
+|  <VOID: "void">
+|  <WHILE: "while">
+|  <BEGIN: "begin">
+|  <END: "end">
+}
+
+//SYMBOLS
+TOKEN : {
+	<ADD : "+"> 
+| <SUB : "-"> 
+| <MUL : "*"> 
+| <DIV : "/">
+| <EQ : "="> 
+| <NOTEQ : "!=">
+| <LT : "<"> 
+| <GT : ">"> 
+| <LE : "<="> 
+| <GE : ">="> 
+| <LBR : "(">
+| <RBR : ")"> 
+| <COMMA : ","> 
+| <SEMIC : ";"> 
+| <COLON : ":">
+| <ASSIGN : ":=">
+}
+
+//STATIC TOKENS
+TOKEN : {
+<#DIGIT: ["0"-"9"]>
+|  <NUM : (<DIGIT>)+ | (<DIGIT>) + "." (<DIGIT>)+>
+|  <STRING: "\"" (~["\"","\\","\n","\r"] | "\\" (["n","t","b","r","f","\\","\'","\""] | ["0"-"7"] (["0"-"7"])? | ["0"-"3"] ["0"-"7"] ["0"-"7"]))* "\"">
+}
+
+
+//IDENTIFIER TOKEN
+TOKEN : {
+ <ID: <LETTER>(<LETTER>|<DIGIT>|"_")*>
+|  <#LETTER: (["a"-"z","A"-"Z"])>
+}
+
+//ANYTHING NOT RECOGNISED
+TOKEN: {
+	<OTHER: ~[] >
+}
+
+//GRAMMAR RULES
+void prog() : {}
+{
+	(decl())*(function())*main_prog()
+}
+
+void decl() : {}{
+	(var_decl() | const_decl())
+}
+
+void var_decl () : {}{
+	<VAR>ident_list()<COLON>type()(<COMMA>ident_list()<COLON>type())*<SEMIC>
+}
+
+void const_decl() : {}{
+	<CONST><ID><COLON>type()<EQ>expression()(<COMMA><ID><COLON>type()<EQ>expression())*<SEMIC>
+}
+
+void function () :{} {
+	type()<ID><LBR>param_list()<RBR><BEGIN>
+		(decl())*(statement()<SEMIC>)*<RETURN>(expression() | {})<SEMIC>
+	<END>
+}
+
+void param_list () :{} {
+	(<ID><COLON>type()(<COMMA><ID><COLON>type())* | {})
+}
+
+void type () :{}{
+	<INT> | <BOOL> | <VOID>
+}
+
+void main_prog() :{} {
+	<MAIN>
+	<BEGIN>
+	(decl())*(statement()<SEMIC>)*
+	<END>
+}
+
+void statement () :{}{
+	<ID>(<ASSIGN>expression() | <LBR>arg_list()<RBR>)
+	|<BEGIN>(statement()<SEMIC>)*<END>
+	|<IF>condition()<THEN>statement()<SEMIC><ELSE>statement()
+	|<WHILE>condition()<DO>statement()
+	|{}
+}
+void condition() :{}{
+	notAssosiated() [(<OR> associated())]
+}
+
+void notAssosiated() : {}{
+	associated() [(<AND> notAssosiated())]
+}
+
+void associated() : {}{
+	LOOKAHEAD(expression()(<EQ>|<NOTEQ>|<LT>|<GT>|<LE>|<GE>))
+	expression()(<EQ>|<NOTEQ>|<LT>|<GT>|<LE>|<GE>)expression()
+    |<NOT>associated()
+	|<LBR>condition()<RBR>
+	|<ID>[<LBR>arg_list()<RBR>]
+}
+
+void expression() : {}{
+	term()((<ADD>|<SUB>) term())*
+}
+
+void term() : {}{
+	fragment() ((<MUL> | <DIV>) fragment())*
+}
+
+void fragment() : {}{
+	(<ADD>|<SUB>) fragment()
+	|<TRUE>
+	|<FALSE>
+	|<NUM>
+	|<LBR>expression()<RBR>
+	|<ID>[<LBR>[arg_list()]<RBR>]
+}
+
+void ident_list () :{}{
+	<ID>(<COMMA><ID>)*
+}
+
+void arg_list():{}{
+	(<ID>(<COMMA><ID>)*)
+}
